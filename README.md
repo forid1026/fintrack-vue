@@ -1,181 +1,164 @@
-# 💰 Income & Expense Tracker
+# 💰 FinTrack
 
-A clean and responsive **Income & Expense Tracker** built with **Vue 3**.
-This project helps users track their income, expenses, categories, and current balance through a simple and modern dashboard.
+A simple and modern **Personal Income & Expense Tracker** built with **Vue 3**.
+
+FinTrack helps users track their income and expenses, monitor their balance, analyze spending, and keep their financial data saved in the browser.
 
 ## ✨ Features
 
-* 📊 Total balance calculation
-* 💵 Total income tracking
-* 💸 Total expense tracking
-* ➕ Add income and expense transactions
-* 🗂️ Separate categories for income and expenses
-* 🔄 Dynamic category selection based on transaction type
-* 💰 Automatic balance calculation
-* 📋 Recent transaction list
-* 🎨 Modern dark-themed responsive UI
-* 📱 Mobile-friendly design
-* ✅ Basic form validation
-* 🔢 Automatic amount formatting with Bangladeshi Taka (৳)
+- ➕ Add income and expense
+- ✏️ Edit transactions
+- 🗑️ Delete transactions
+- 🧹 Clear all transactions
+- 🔍 Search transactions
+- 🔽 Filter by type and category
+- 📅 Track transaction dates
+- 💰 Total income, expense and balance
+- 📆 Monthly financial summary
+- 📊 Expense breakdown by category
+- 🥧 Expense distribution chart
+- 📈 Monthly income vs expense chart
+- 💾 LocalStorage data persistence
+- 📥 Export transactions as CSV
+- 📱 Fully responsive design
+- 🎨 Modern dark navy UI
 
-## 🛠️ Technologies Used
+## 🛠️ Tech Stack
 
-* **Vue 3**
-* **JavaScript**
-* **HTML5**
-* **CSS3**
-* **Vue Composition API**
-* `ref()`
-* `computed()`
-* `v-model`
-* `v-for`
-* Conditional rendering
+- **Vue 3**
+- **JavaScript**
+- **Vite**
+- **Chart.js**
+- **Vue Chart.js**
+- **CSS3**
+- **LocalStorage**
+
+### Vue Concepts
+
+- Composition API
+- `<script setup>`
+- `ref()`
+- `computed()`
+- `watch()`
+- `onMounted()`
+- Props & Emits
+- Component-based architecture
 
 ## 📂 Project Structure
 
-```text
-src/
-├── App.vue
-├── main.js
-└── assets/
-```
-
-The main application logic and UI are currently implemented in:
-
-```text
-src/App.vue
-```
+    fintrack-vue/
+    │
+    ├── public/
+    │   └── favicon.svg
+    │
+    ├── src/
+    │   ├── assets/
+    │   │   └── main.css
+    │   │
+    │   ├── components/
+    │   │   ├── AppHeader.vue
+    │   │   ├── SummaryCards.vue
+    │   │   ├── MonthlySummary.vue
+    │   │   ├── TransactionForm.vue
+    │   │   ├── TransactionFilters.vue
+    │   │   ├── TransactionList.vue
+    │   │   ├── ExpenseBreakdown.vue
+    │   │   └── FinanceCharts.vue
+    │   │
+    │   ├── App.vue
+    │   └── main.js
+    │
+    ├── index.html
+    ├── package.json
+    └── README.md
 
 ## 🚀 Getting Started
 
-### 1. Clone the repository
+### Clone the repository
 
-```bash
-git clone https://github.com/forid1026/income-expense-tracker
-```
+    git clone https://github.com/forid1026/fintrack-vue.git
 
-### 2. Go to the project directory
+### Go to the project directory
 
-```bash
-cd expense-tracker
-```
+    cd fintrack-vue
 
-### 3. Install dependencies
+### Install dependencies
 
-```bash
-npm install
-```
+    npm install
 
-### 4. Start the development server
+### Start the development server
 
-```bash
-npm run dev
-```
+    npm run dev
 
-The application will then be available through the local development URL shown in your terminal.
+Open the local URL shown in your terminal.
 
-## 🧮 How It Works
+## 💾 Data Storage
 
-The application stores transactions in a reactive Vue array.
+FinTrack uses **LocalStorage** to save transactions directly in the browser.
 
-Each transaction contains:
+Storage key:
 
-```js
-{
-  id: 123456789,
-  title: "Monthly Salary",
-  category: "Salary",
-  amount: 40000,
-  type: "income"
-}
-```
+    fintrack_transactions
 
-Income and expense totals are calculated using Vue's `computed()`:
+Example transaction:
 
-```js
-const totalIncome = computed(() => {
-  return transactions.value
-    .filter(transaction => transaction.type === 'income')
-    .reduce(
-      (total, transaction) => total + Number(transaction.amount),
-      0
-    );
-});
-```
+    {
+      id: 123456789,
+      title: "Monthly Salary",
+      category: "Salary",
+      amount: 40000,
+      type: "income",
+      date: "2026-09-21"
+    }
 
-The balance is calculated as:
-
-```text
-Balance = Total Income - Total Expenses
-```
-
-## 📌 Current Categories
+## 📌 Categories
 
 ### Income
 
-* Salary
-* Freelance
-* Business
-* Investment
-* Bonus
-* Gift
-* Other
+Salary, Freelance, Business, Investment, Bonus, Gift, Other
 
 ### Expense
 
-* Groceries
-* Utilities
-* Entertainment
-* Restaurants
-* Travel
-* Clothing
-* Healthcare
-* Personal
-* Education
-* Other
+Groceries, Utilities, Entertainment, Restaurants, Travel, Clothing, Healthcare, Personal, Education, Other
 
-## 🔮 Future Improvements
+## 📊 Financial Summary
 
-The project is currently being developed further. Planned features include:
+FinTrack provides:
 
-* ✏️ Edit transactions
-* 🗑️ Delete transactions
-* 💾 LocalStorage persistence
-* 🔍 Search transactions
-* 🔽 Filter by type
-* 🗂️ Filter by category
-* 📅 Date-based transactions
-* 📈 Expense charts and statistics
-* 📊 Monthly financial reports
-* 🌙 Dark/Light mode
-* 📱 Improved mobile experience
-
-## 🎯 Learning Purpose
-
-This project was created as a practical **Vue 3 learning project** to practice:
-
-* Reactive state management with `ref()`
-* Derived state with `computed()`
-* Form handling with `v-model`
-* Event handling
-* List rendering
-* Conditional rendering
-* Component UI structure
-* Basic application logic
+- Total Income
+- Total Expense
+- Current Balance
+- Monthly Income
+- Monthly Expense
+- Monthly Net Balance
+- Category-wise Expense Breakdown
+- Income vs Expense Charts
 
 ## 📸 Preview
 
-*Add your project screenshot or demo GIF here.*
+Add a screenshot of the application here:
 
-```md
-![Expense Tracker Preview](./screenshots/expense-tracker.png)
-```
+![FinTrack Preview](./screenshots/fintrack.png)
+
+## 🎯 Purpose
+
+FinTrack was created as a practical **Vue 3 learning and portfolio project** to practice:
+
+- Reactive state management
+- CRUD operations
+- Component communication
+- Form handling
+- Data filtering
+- LocalStorage
+- Chart integration
+- CSV export
+- Responsive UI development
 
 ## 👨‍💻 Author
 
 **Sheikh Farid**
 
-Software Developer | Laravel | PHP | Vue.js
+Software Developer | Laravel | PHP | Vue.js | JavaScript
 
 ---
 
