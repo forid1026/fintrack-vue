@@ -1,39 +1,182 @@
-# expense-tracker
+# 💰 Income & Expense Tracker
 
-This template should help get you started developing with Vue 3 in Vite.
+A clean and responsive **Income & Expense Tracker** built with **Vue 3**.
+This project helps users track their income, expenses, categories, and current balance through a simple and modern dashboard.
 
-## Recommended IDE Setup
+## ✨ Features
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+* 📊 Total balance calculation
+* 💵 Total income tracking
+* 💸 Total expense tracking
+* ➕ Add income and expense transactions
+* 🗂️ Separate categories for income and expenses
+* 🔄 Dynamic category selection based on transaction type
+* 💰 Automatic balance calculation
+* 📋 Recent transaction list
+* 🎨 Modern dark-themed responsive UI
+* 📱 Mobile-friendly design
+* ✅ Basic form validation
+* 🔢 Automatic amount formatting with Bangladeshi Taka (৳)
 
-## Recommended Browser Setup
+## 🛠️ Technologies Used
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+* **Vue 3**
+* **JavaScript**
+* **HTML5**
+* **CSS3**
+* **Vue Composition API**
+* `ref()`
+* `computed()`
+* `v-model`
+* `v-for`
+* Conditional rendering
 
-## Customize configuration
+## 📂 Project Structure
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+```text
+src/
+├── App.vue
+├── main.js
+└── assets/
+```
 
-## Project Setup
+The main application logic and UI are currently implemented in:
 
-```sh
+```text
+src/App.vue
+```
+
+## 🚀 Getting Started
+
+### 1. Clone the repository
+
+```bash
+git clone YOUR_REPOSITORY_URL
+```
+
+### 2. Go to the project directory
+
+```bash
+cd expense-tracker
+```
+
+### 3. Install dependencies
+
+```bash
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+### 4. Start the development server
 
-```sh
+```bash
 npm run dev
 ```
 
-### Compile and Minify for Production
+The application will then be available through the local development URL shown in your terminal.
 
-```sh
-npm run build
+## 🧮 How It Works
+
+The application stores transactions in a reactive Vue array.
+
+Each transaction contains:
+
+```js
+{
+  id: 123456789,
+  title: "Monthly Salary",
+  category: "Salary",
+  amount: 40000,
+  type: "income"
+}
 ```
-"# income-expense-tracker" 
+
+Income and expense totals are calculated using Vue's `computed()`:
+
+```js
+const totalIncome = computed(() => {
+  return transactions.value
+    .filter(transaction => transaction.type === 'income')
+    .reduce(
+      (total, transaction) => total + Number(transaction.amount),
+      0
+    );
+});
+```
+
+The balance is calculated as:
+
+```text
+Balance = Total Income - Total Expenses
+```
+
+## 📌 Current Categories
+
+### Income
+
+* Salary
+* Freelance
+* Business
+* Investment
+* Bonus
+* Gift
+* Other
+
+### Expense
+
+* Groceries
+* Utilities
+* Entertainment
+* Restaurants
+* Travel
+* Clothing
+* Healthcare
+* Personal
+* Education
+* Other
+
+## 🔮 Future Improvements
+
+The project is currently being developed further. Planned features include:
+
+* ✏️ Edit transactions
+* 🗑️ Delete transactions
+* 💾 LocalStorage persistence
+* 🔍 Search transactions
+* 🔽 Filter by type
+* 🗂️ Filter by category
+* 📅 Date-based transactions
+* 📈 Expense charts and statistics
+* 📊 Monthly financial reports
+* 🌙 Dark/Light mode
+* 📱 Improved mobile experience
+
+## 🎯 Learning Purpose
+
+This project was created as a practical **Vue 3 learning project** to practice:
+
+* Reactive state management with `ref()`
+* Derived state with `computed()`
+* Form handling with `v-model`
+* Event handling
+* List rendering
+* Conditional rendering
+* Component UI structure
+* Basic application logic
+
+## 📸 Preview
+
+*Add your project screenshot or demo GIF here.*
+
+```md
+![Expense Tracker Preview](./screenshots/expense-tracker.png)
+```
+
+## 👨‍💻 Author
+
+**Sheikh Farid**
+
+Software Developer | Laravel | PHP | Vue.js
+
+---
+
+⭐ If you find this project useful, feel free to give the repository a star.
