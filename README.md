@@ -51,7 +51,7 @@ src/App.vue
 ### 1. Clone the repository
 
 ```bash
-git clone YOUR_REPOSITORY_URL
+git clone https://github.com/forid1026/income-expense-tracker
 ```
 
 ### 2. Go to the project directory

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 
 const expenseCategories = [
   'Groceries',
@@ -33,6 +33,8 @@ const transaction = ref({
 
 const transactions = ref([]);
 
+const editingId = ref(null);
+
 // Dynamic categories based on transaction type
 const availableCategories = computed(() => {
   if (transaction.value.type === 'income') {
@@ -51,7 +53,19 @@ const changeType = () => {
   transaction.value.category = '';
 };
 
-// Add Transaction
+// Reset form
+const resetForm = () => {
+  transaction.value = {
+    title: '',
+    category: '',
+    amount: null,
+    type: ''
+  };
+
+  editingId.value = null;
+};
+
+// Add / Update Transaction
 const submit = () => {
   if (
     !transaction.value.title ||
@@ -63,6 +77,28 @@ const submit = () => {
     return;
   }
 
+  // Update existing transaction
+  if (editingId.value !== null) {
+    const index = transactions.value.findIndex(
+      trans => trans.id === editingId.value
+    );
+
+    if (index !== -1) {
+      transactions.value[index] = {
+        ...transactions.value[index],
+        title: transaction.value.title,
+        category: transaction.value.category,
+        amount: transaction.value.amount,
+        type: transaction.value.type
+      };
+    }
+
+    resetForm();
+
+    return;
+  }
+
+  // Add new transaction
   transactions.value.unshift({
     id: Date.now(),
     title: transaction.value.title,
@@ -71,13 +107,72 @@ const submit = () => {
     type: transaction.value.type
   });
 
-  transaction.value = {
-    title: '',
-    category: '',
-    amount: null,
-    type: ''
-  };
+  resetForm();
 };
+
+// Edit transaction
+const editTransaction = (trans) => {
+  transaction.value = {
+    title: trans.title,
+    category: trans.category,
+    amount: trans.amount,
+    type: trans.type
+  };
+
+  editingId.value = trans.id;
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+};
+
+// Delete transaction
+const deleteTransaction = (id) => {
+  const confirmed = confirm(
+    'Are you sure you want to delete this transaction?'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  transactions.value = transactions.value.filter(
+    trans => trans.id !== id
+  );
+
+  // If currently editing the deleted transaction
+  if (editingId.value === id) {
+    resetForm();
+  }
+};
+
+// Save data to local storage
+const saveToLocalStorage = () => {
+  localStorage.setItem(
+    'transactions',
+    JSON.stringify(transactions.value)
+  );
+};
+
+// Load data from local storage
+const loadFromLocalStorage = () => {
+  const data = localStorage.getItem('transactions');
+
+  if (data) {
+    transactions.value = JSON.parse(data);
+  }
+};
+
+watch(
+  transactions,
+  saveToLocalStorage,
+  { deep: true }
+);
+
+onMounted(() => {
+  loadFromLocalStorage();
+});
 
 // Total Income
 const totalIncome = computed(() => {
@@ -137,7 +232,9 @@ const formatAmount = (amount) => {
       <!-- Balance -->
       <div class="summary-card balance-card">
         <div class="card-top">
-          <span class="card-label">Total Balance</span>
+          <span class="card-label">
+            Total Balance
+          </span>
 
           <span class="card-icon">
             ৳
@@ -157,7 +254,9 @@ const formatAmount = (amount) => {
       <!-- Income -->
       <div class="summary-card income-card">
         <div class="card-top">
-          <span class="card-label">Total Income</span>
+          <span class="card-label">
+            Total Income
+          </span>
 
           <span class="card-icon">
             ↗
@@ -177,7 +276,9 @@ const formatAmount = (amount) => {
       <!-- Expense -->
       <div class="summary-card expense-card">
         <div class="card-top">
-          <span class="card-label">Total Expenses</span>
+          <span class="card-label">
+            Total Expenses
+          </span>
 
           <span class="card-icon">
             ↘
@@ -199,18 +300,28 @@ const formatAmount = (amount) => {
     <!-- Main Content -->
     <main class="main-grid">
 
-      <!-- Add Transaction -->
+      <!-- Add / Edit Transaction -->
       <section class="panel form-panel">
 
         <div class="panel-header">
           <div>
-            <p class="section-label">TRANSACTION</p>
+            <p class="section-label">
+              TRANSACTION
+            </p>
 
-            <h2>Add Transaction</h2>
+            <h2>
+              {{ editingId !== null
+                ? 'Edit Transaction'
+                : 'Add Transaction'
+              }}
+            </h2>
           </div>
 
-          <div class="plus-icon">
-            +
+          <div
+            class="plus-icon"
+            :class="{ editing: editingId !== null }"
+          >
+            {{ editingId !== null ? '✎' : '+' }}
           </div>
         </div>
 
@@ -368,17 +479,39 @@ const formatAmount = (amount) => {
           </div>
 
 
-          <!-- Submit -->
-          <button
-            type="submit"
-            class="submit-btn"
-          >
+          <!-- Buttons -->
+          <div class="form-actions">
 
-            <span>+</span>
+            <button
+              type="submit"
+              class="submit-btn"
+              :class="{ update: editingId !== null }"
+            >
 
-            Add Transaction
+              <span>
+                {{ editingId !== null ? '✓' : '+' }}
+              </span>
 
-          </button>
+              {{
+                editingId !== null
+                  ? 'Update Transaction'
+                  : 'Add Transaction'
+              }}
+
+            </button>
+
+
+            <!-- Cancel Edit -->
+            <button
+              v-if="editingId !== null"
+              type="button"
+              class="cancel-btn"
+              @click="resetForm"
+            >
+              Cancel
+            </button>
+
+          </div>
 
         </form>
 
@@ -436,18 +569,22 @@ const formatAmount = (amount) => {
         >
 
           <div
-            v-for="transaction in transactions"
-            :key="transaction.id"
+            v-for="trans in transactions"
+            :key="trans.id"
             class="transaction-item"
+            :class="{
+              'is-editing': editingId === trans.id
+            }"
           >
 
+            <!-- Icon -->
             <div
               class="transaction-icon"
-              :class="transaction.type"
+              :class="trans.type"
             >
 
               {{
-                transaction.type === 'income'
+                trans.type === 'income'
                   ? '↗'
                   : '↘'
               }}
@@ -455,23 +592,24 @@ const formatAmount = (amount) => {
             </div>
 
 
+            <!-- Info -->
             <div class="transaction-info">
 
               <h3>
-                {{ transaction.title }}
+                {{ trans.title }}
               </h3>
 
               <div class="transaction-meta">
 
                 <span>
-                  {{ transaction.category }}
+                  {{ trans.category }}
                 </span>
 
                 <span>•</span>
 
                 <span>
                   {{
-                    transaction.type === 'income'
+                    trans.type === 'income'
                       ? 'Income'
                       : 'Expense'
                   }}
@@ -482,18 +620,43 @@ const formatAmount = (amount) => {
             </div>
 
 
+            <!-- Amount -->
             <div
               class="transaction-amount"
-              :class="transaction.type"
+              :class="trans.type"
             >
 
               {{
-                transaction.type === 'income'
+                trans.type === 'income'
                   ? '+'
                   : '-'
               }}
 
-              ৳{{ formatAmount(transaction.amount) }}
+              ৳{{ formatAmount(trans.amount) }}
+
+            </div>
+
+
+            <!-- Actions -->
+            <div class="transaction-actions">
+
+              <button
+                type="button"
+                class="action-btn edit-btn"
+                title="Edit transaction"
+                @click="editTransaction(trans)"
+              >
+                ✎
+              </button>
+
+              <button
+                type="button"
+                class="action-btn delete-btn"
+                title="Delete transaction"
+                @click="deleteTransaction(trans.id)"
+              >
+                🗑
+              </button>
 
             </div>
 
@@ -519,6 +682,7 @@ const formatAmount = (amount) => {
 .app {
   min-height: 100vh;
   padding: 45px 25px;
+
   background:
     radial-gradient(
       circle at top right,
@@ -526,6 +690,7 @@ const formatAmount = (amount) => {
       transparent 30%
     ),
     #0b1120;
+
   color: #e5e7eb;
 
   font-family:
@@ -544,14 +709,17 @@ const formatAmount = (amount) => {
 .main-grid {
   width: 100%;
   max-width: 1180px;
+
   margin-left: auto;
   margin-right: auto;
 }
 
 .header {
   display: flex;
+
   justify-content: space-between;
   align-items: center;
+
   margin-bottom: 35px;
 }
 
@@ -628,6 +796,7 @@ const formatAmount = (amount) => {
 
 .card-top {
   display: flex;
+
   align-items: center;
   justify-content: space-between;
 }
@@ -749,6 +918,12 @@ const formatAmount = (amount) => {
   color: #60a5fa;
 
   font-size: 22px;
+}
+
+.plus-icon.editing {
+  background: rgba(245, 158, 11, 0.1);
+
+  color: #fbbf24;
 }
 
 
@@ -922,7 +1097,20 @@ const formatAmount = (amount) => {
 }
 
 
-/* Button */
+/* Form Actions */
+
+.form-actions {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 10px;
+
+  margin-top: 8px;
+}
+
+
+/* Submit */
 
 .submit-btn {
   width: 100%;
@@ -932,8 +1120,6 @@ const formatAmount = (amount) => {
   justify-content: center;
 
   gap: 8px;
-
-  margin-top: 8px;
 
   padding: 13px;
 
@@ -958,8 +1144,47 @@ const formatAmount = (amount) => {
   transform: translateY(-1px);
 }
 
+.submit-btn.update {
+  background: #d97706;
+}
+
+.submit-btn.update:hover {
+  background: #f59e0b;
+}
+
 .submit-btn span {
-  font-size: 19px;
+  font-size: 18px;
+}
+
+
+/* Cancel */
+
+.cancel-btn {
+  width: 100%;
+
+  padding: 11px;
+
+  border: 1px solid #334155;
+  border-radius: 10px;
+
+  background: transparent;
+
+  color: #94a3b8;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+.cancel-btn:hover {
+  border-color: #475569;
+
+  background: #1e293b;
+
+  color: #e2e8f0;
 }
 
 
@@ -1001,11 +1226,25 @@ const formatAmount = (amount) => {
   padding: 16px 4px;
 
   border-bottom: 1px solid #1e293b;
+
+  transition: 0.2s;
 }
 
 .transaction-item:last-child {
   border-bottom: none;
 }
+
+.transaction-item.is-editing {
+  padding-left: 10px;
+  padding-right: 10px;
+
+  border-radius: 12px;
+
+  background: rgba(245, 158, 11, 0.06);
+}
+
+
+/* Transaction Icon */
 
 .transaction-icon {
   width: 43px;
@@ -1034,6 +1273,9 @@ const formatAmount = (amount) => {
 
   color: #f87171;
 }
+
+
+/* Transaction Info */
 
 .transaction-info {
   min-width: 0;
@@ -1068,6 +1310,9 @@ const formatAmount = (amount) => {
   font-size: 11px;
 }
 
+
+/* Amount */
+
 .transaction-amount {
   font-size: 14px;
 
@@ -1082,6 +1327,57 @@ const formatAmount = (amount) => {
 
 .transaction-amount.expense {
   color: #f87171;
+}
+
+
+/* Actions */
+
+.transaction-actions {
+  display: flex;
+
+  align-items: center;
+
+  gap: 6px;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #26344d;
+  border-radius: 8px;
+
+  background: #111a2d;
+
+  font-size: 13px;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+.edit-btn {
+  color: #60a5fa;
+}
+
+.edit-btn:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.delete-btn {
+  color: #f87171;
+}
+
+.delete-btn:hover {
+  border-color: rgba(239, 68, 68, 0.5);
+
+  background: rgba(239, 68, 68, 0.1);
 }
 
 
@@ -1155,6 +1451,29 @@ const formatAmount = (amount) => {
 }
 
 
+@media (max-width: 700px) {
+
+  .transaction-item {
+    align-items: flex-start;
+
+    flex-wrap: wrap;
+  }
+
+  .transaction-info {
+    flex: 1;
+  }
+
+  .transaction-amount {
+    margin-left: 57px;
+  }
+
+  .transaction-actions {
+    margin-left: auto;
+  }
+
+}
+
+
 @media (max-width: 600px) {
 
   .app {
@@ -1191,7 +1510,14 @@ const formatAmount = (amount) => {
   }
 
   .transaction-amount {
+    margin-left: 0;
+
     font-size: 12px;
+  }
+
+  .action-btn {
+    width: 30px;
+    height: 30px;
   }
 
 }
