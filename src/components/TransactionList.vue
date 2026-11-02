@@ -1,171 +1,92 @@
 <script setup>
+import { CATEGORY_ICONS } from '../constants/categories.js';
+import { money, formatDate } from '../utils/format.js';
+
 defineProps({
   transactions: {
     type: Array,
     default: () => []
   },
-
   editingId: {
+    type: [String, Number],
     default: null
   }
 });
 
-const emit = defineEmits([
-  'edit',
-  'delete'
-]);
+const emit = defineEmits(['edit', 'delete']);
 
-const formatAmount = amount => {
-  return new Intl.NumberFormat('en-BD').format(
-    Number(amount)
-  );
-};
-
-const formatDate = date => {
-  if (!date) {
-    return '';
-  }
-
-  return new Date(
-    `${date}T00:00:00`
-  ).toLocaleDateString('en-BD', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
-};
-
-const getIcon = category => {
-  const icons = {
-    Groceries: '🛒',
-    Utilities: '💡',
-    Entertainment: '🎬',
-    Restaurants: '🍔',
-    Travel: '✈️',
-    Clothing: '👕',
-    Healthcare: '🏥',
-    Personal: '👤',
-    Education: '📚',
-    Salary: '💼',
-    Freelance: '💻',
-    Business: '🏢',
-    Investment: '📈',
-    Bonus: '🎁',
-    Gift: '🎁',
-    Other: '📌'
-  };
-
-  return icons[category] || '💰';
-};
+const getIcon = (category) => CATEGORY_ICONS[category] || '💰';
 </script>
 
 <template>
-  <div class="list">
-
-    <div
+  <ul class="list">
+    <li
       v-for="trans in transactions"
       :key="trans.id"
       class="transaction"
-      :class="{
-        editing:
-          editingId === trans.id
-      }"
+      :class="{ editing: editingId === trans.id }"
     >
-
-      <div
-        class="icon"
-        :class="trans.type"
-      >
+      <div class="icon" :class="trans.type" aria-hidden="true">
         {{ getIcon(trans.category) }}
       </div>
 
       <div class="info">
-
-        <h4>
-          {{ trans.title }}
-        </h4>
+        <h4>{{ trans.title }}</h4>
 
         <div class="meta">
-
-          <span>
-            {{ trans.category }}
-          </span>
-
-          <span>•</span>
-
-          <span>
-            {{ formatDate(trans.date) }}
-          </span>
-
+          <span>{{ trans.category }}</span>
+          <span aria-hidden="true">•</span>
+          <span>{{ formatDate(trans.date) }}</span>
         </div>
-
       </div>
 
-      <div
-        class="type"
-        :class="trans.type"
-      >
-        {{
-          trans.type === 'income'
-            ? 'Income'
-            : 'Expense'
-        }}
+      <div class="type" :class="trans.type">
+        {{ trans.type === 'income' ? 'Income' : 'Expense' }}
       </div>
 
-      <div
-        class="amount"
-        :class="trans.type"
-      >
-        {{
-          trans.type === 'income'
-            ? '+'
-            : '-'
-        }}
-        ৳ {{ formatAmount(trans.amount) }}
+      <div class="amount" :class="trans.type">
+        {{ trans.type === 'income' ? '+' : '-' }}
+        {{ money(trans.amount) }}
       </div>
 
       <div class="actions">
-
         <button
+          type="button"
           class="edit"
-          title="Edit"
+          :title="`Edit ${trans.title}`"
+          :aria-label="`Edit ${trans.title}`"
           @click="emit('edit', trans)"
         >
           ✎
         </button>
 
         <button
+          type="button"
           class="delete"
-          title="Delete"
+          :title="`Delete ${trans.title}`"
+          :aria-label="`Delete ${trans.title}`"
           @click="emit('delete', trans.id)"
         >
           ×
         </button>
-
       </div>
-
-    </div>
-
-  </div>
+    </li>
+  </ul>
 </template>
 
 <style scoped>
 .list {
-  margin-top: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
 }
 
 .transaction {
   display: grid;
-
-  grid-template-columns:
-    45px 1fr auto auto auto;
-
+  grid-template-columns: 45px 1fr auto auto auto;
   align-items: center;
-
   gap: 15px;
-
   padding: 16px 4px;
-
   border-bottom: 1px solid #1c2738;
 }
 
@@ -175,9 +96,7 @@ const getIcon = category => {
 
 .transaction.editing {
   background: #172033;
-
   border-radius: 9px;
-
   padding-left: 10px;
   padding-right: 10px;
 }
@@ -185,14 +104,10 @@ const getIcon = category => {
 .icon {
   width: 42px;
   height: 42px;
-
   border-radius: 10px;
-
   display: grid;
   place-items: center;
-
   background: #192337;
-
   font-size: 19px;
 }
 
@@ -204,29 +119,28 @@ const getIcon = category => {
   background: #30171c;
 }
 
+.info {
+  min-width: 0;
+}
+
 .info h4 {
   margin: 0 0 5px;
-
   color: #e5e7eb;
-
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .meta {
   display: flex;
-
+  flex-wrap: wrap;
   gap: 7px;
-
-  color: #64748b;
-
+  color: #8b9ab3;
   font-size: 11px;
 }
 
 .type {
   padding: 5px 8px;
-
   border-radius: 6px;
-
   font-size: 11px;
 }
 
@@ -237,15 +151,14 @@ const getIcon = category => {
 
 .type.expense {
   background: #30171c;
-  color: #ef4444;
+  color: #f87171;
 }
 
 .amount {
   min-width: 115px;
-
   text-align: right;
-
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .amount.income {
@@ -253,25 +166,20 @@ const getIcon = category => {
 }
 
 .amount.expense {
-  color: #ef4444;
+  color: #f87171;
 }
 
 .actions {
   display: flex;
-
   gap: 6px;
 }
 
 .actions button {
-  width: 31px;
-  height: 31px;
-
+  width: 34px;
+  height: 34px;
   border-radius: 7px;
-
   border: 1px solid #29364d;
-
   background: #172033;
-
   cursor: pointer;
 }
 
@@ -280,7 +188,7 @@ const getIcon = category => {
 }
 
 .delete {
-  color: #ef4444;
+  color: #f87171;
 }
 
 .actions button:hover {
@@ -289,8 +197,7 @@ const getIcon = category => {
 
 @media (max-width: 700px) {
   .transaction {
-    grid-template-columns:
-      42px 1fr auto;
+    grid-template-columns: 42px 1fr auto;
   }
 
   .type {
@@ -299,9 +206,7 @@ const getIcon = category => {
 
   .amount {
     grid-column: 2;
-
     text-align: left;
-
     min-width: auto;
   }
 

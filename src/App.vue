@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue';
 
 import AppHeader from './components/AppHeader.vue';
 import SummaryCards from './components/SummaryCards.vue';
@@ -8,325 +8,331 @@ import TransactionForm from './components/TransactionForm.vue';
 import TransactionFilters from './components/TransactionFilters.vue';
 import TransactionList from './components/TransactionList.vue';
 import ExpenseBreakdown from './components/ExpenseBreakdown.vue';
-import FinanceCharts from './components/FinanceCharts.vue';
+import ChartsSkeleton from './components/ChartsSkeleton.vue';
+import ToastHost from './components/ToastHost.vue';
+import ConfirmDialog from './components/ConfirmDialog.vue';
 
+import { PAGE_SIZE } from './config.js';
+import { useTransactions } from './composables/useTransactions.js';
+import { useCurrentMonth } from './composables/useCurrentMonth.js';
+import { useToast } from './composables/useToast.js';
+import { sumAmounts } from './utils/money.js';
+import { monthKeyOf, todayISO } from './utils/date.js';
+import { toCSV, csvToTransactions } from './utils/csv.js';
+import { toBackupJSON, parseBackupJSON } from './utils/backup.js';
+import { downloadFile } from './utils/download.js';
 
-// ─────────────────────────────────────────────
-// Categories
-// ─────────────────────────────────────────────
-
-const expenseCategories = [
-  'Groceries',
-  'Utilities',
-  'Entertainment',
-  'Restaurants',
-  'Travel',
-  'Clothing',
-  'Healthcare',
-  'Personal',
-  'Education',
-  'Other'
-];
-
-const incomeCategories = [
-  'Salary',
-  'Freelance',
-  'Business',
-  'Investment',
-  'Bonus',
-  'Gift',
-  'Other'
-];
-
-
-// ─────────────────────────────────────────────
-// Transaction State
-// ─────────────────────────────────────────────
-
-const transaction = ref({
-  title: '',
-  category: '',
-  amount: null,
-  type: '',
-  date: new Date().toISOString().split('T')[0]
+// Chart.js is the heaviest dependency, so load it on demand
+// to keep the first paint fast.
+const FinanceCharts = defineAsyncComponent({
+  loader: () => import('./components/FinanceCharts.vue'),
+  loadingComponent: ChartsSkeleton,
+  delay: 150
 });
 
-const transactions = ref([]);
+
+const { toast } = useToast();
+
+const {
+  transactions,
+  storageStatus,
+  loadNotice,
+  add,
+  update,
+  remove,
+  restore,
+  clearAll,
+  replaceAll,
+  importItems,
+  totalIncome,
+  totalExpense,
+  totalBalance
+} = useTransactions();
+
+const { nowMonth } = useCurrentMonth();
+
+
+// ─────────────────────────────────────────────
+// Storage warnings
+// ─────────────────────────────────────────────
+
+const storageWarning = computed(() => {
+  switch (storageStatus.value) {
+    case 'unavailable':
+      return 'Browser storage is unavailable (private mode or blocked by settings). Your data will be lost when you close this tab. Use Backup to save a copy.';
+    case 'quota':
+      return 'Browser storage is full, so your latest changes are not being saved. Download a Backup and free up some space.';
+    case 'corrupt':
+      return 'Previously saved data could not be read, so the app started empty. A raw copy was kept in your browser storage under "fintrack_transactions__corrupt".';
+    default:
+      return '';
+  }
+});
+
+onMounted(() => {
+  if (loadNotice.value) {
+    toast.info(loadNotice.value);
+  }
+});
+
+
+// ─────────────────────────────────────────────
+// Add / Edit
+// ─────────────────────────────────────────────
 
 const editingId = ref(null);
 
+const editingTransaction = computed(() => {
+  if (editingId.value === null) {
+    return null;
+  }
+
+  return transactions.value.find(item => item.id === editingId.value) ?? null;
+});
+
+// The transaction being edited was deleted (e.g. in another tab).
+watch(editingTransaction, item => {
+  if (!item) {
+    editingId.value = null;
+  }
+});
+
+const scrollToForm = () => {
+  const reduceMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)'
+  ).matches;
+
+  document.getElementById('transaction-form')?.scrollIntoView({
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'start'
+  });
+};
+
+const startEdit = (trans) => {
+  editingId.value = trans.id;
+  scrollToForm();
+};
+
+const cancelEdit = () => {
+  editingId.value = null;
+};
+
+const onSubmit = (value) => {
+  if (editingId.value !== null) {
+    const result = update(editingId.value, value);
+
+    editingId.value = null;
+
+    if (!result.ok) {
+      toast.error(result.errors._ || 'Could not update the transaction.');
+      return;
+    }
+
+    toast.success('Transaction updated.');
+    return;
+  }
+
+  const result = add(value);
+
+  if (!result.ok) {
+    toast.error('Could not add the transaction.');
+    return;
+  }
+
+  toast.success('Transaction added.');
+};
+
 
 // ─────────────────────────────────────────────
-// Filters
+// Delete (with undo)
+// ─────────────────────────────────────────────
+
+const onDelete = (id) => {
+  const removed = remove(id);
+
+  if (!removed) {
+    return;
+  }
+
+  if (editingId.value === id) {
+    editingId.value = null;
+  }
+
+  toast.info(`Deleted "${removed.item.title}".`, {
+    duration: 8000,
+    action: {
+      label: 'Undo',
+      handler: () => restore(removed.item, removed.index)
+    }
+  });
+};
+
+
+// ─────────────────────────────────────────────
+// Clear all (confirm + undo)
+// ─────────────────────────────────────────────
+
+const showClearConfirm = ref(false);
+
+const confirmClearAll = () => {
+  showClearConfirm.value = false;
+
+  const previous = clearAll();
+
+  editingId.value = null;
+
+  if (!previous.length) {
+    return;
+  }
+
+  toast.info(`Deleted ${previous.length} transactions.`, {
+    duration: 10000,
+    action: {
+      label: 'Undo',
+      handler: () => replaceAll([...transactions.value, ...previous])
+    }
+  });
+};
+
+
+// ─────────────────────────────────────────────
+// Filters, sorting, pagination
 // ─────────────────────────────────────────────
 
 const search = ref('');
 const typeFilter = ref('all');
 const categoryFilter = ref('all');
+const sort = ref('newest');
+const visibleCount = ref(PAGE_SIZE);
 
-
-// ─────────────────────────────────────────────
-// Form
-// ─────────────────────────────────────────────
-
-const resetForm = () => {
-  transaction.value = {
-    title: '',
-    category: '',
-    amount: null,
-    type: '',
-    date: new Date().toISOString().split('T')[0]
-  };
-
-  editingId.value = null;
+const sorters = {
+  newest: (a, b) => b.date.localeCompare(a.date),
+  oldest: (a, b) => a.date.localeCompare(b.date),
+  highest: (a, b) => b.amount - a.amount,
+  lowest: (a, b) => a.amount - b.amount
 };
-
-
-const changeType = () => {
-  transaction.value.category = '';
-};
-
-
-const submit = () => {
-  if (
-    !transaction.value.title ||
-    !transaction.value.category ||
-    !transaction.value.amount ||
-    !transaction.value.type ||
-    !transaction.value.date
-  ) {
-    return;
-  }
-
-  const amount = Number(transaction.value.amount);
-
-  if (amount <= 0) {
-    return;
-  }
-
-  if (editingId.value) {
-    const index = transactions.value.findIndex(
-      item => item.id === editingId.value
-    );
-
-    if (index !== -1) {
-      transactions.value[index] = {
-        ...transaction.value,
-        amount
-      };
-    }
-  } else {
-    transactions.value.unshift({
-      id: Date.now(),
-      title: transaction.value.title,
-      category: transaction.value.category,
-      amount,
-      type: transaction.value.type,
-      date: transaction.value.date
-    });
-  }
-
-  resetForm();
-};
-
-
-// ─────────────────────────────────────────────
-// Edit
-// ─────────────────────────────────────────────
-
-const editTransaction = (trans) => {
-  editingId.value = trans.id;
-
-  transaction.value = {
-    title: trans.title,
-    category: trans.category,
-    amount: trans.amount,
-    type: trans.type,
-    date: trans.date
-  };
-
-  window.scrollTo({
-    top: 0,
-    behavior: 'smooth'
-  });
-};
-
-
-// ─────────────────────────────────────────────
-// Delete
-// ─────────────────────────────────────────────
-
-const deleteTransaction = (id) => {
-  if (!confirm('Are you sure you want to delete this transaction?')) {
-    return;
-  }
-
-  transactions.value = transactions.value.filter(
-    transaction => transaction.id !== id
-  );
-
-  if (editingId.value === id) {
-    resetForm();
-  }
-};
-
-
-// ─────────────────────────────────────────────
-// Clear All
-// ─────────────────────────────────────────────
-
-const clearAll = () => {
-  if (!transactions.value.length) {
-    return;
-  }
-
-  if (!confirm('Are you sure you want to delete all transactions?')) {
-    return;
-  }
-
-  transactions.value = [];
-  resetForm();
-};
-
-
-// ─────────────────────────────────────────────
-// Summary
-// ─────────────────────────────────────────────
-
-const totalIncome = computed(() => {
-  return transactions.value
-    .filter(transaction => transaction.type === 'income')
-    .reduce((total, transaction) => total + Number(transaction.amount), 0);
-});
-
-
-const totalExpense = computed(() => {
-  return transactions.value
-    .filter(transaction => transaction.type === 'expense')
-    .reduce((total, transaction) => total + Number(transaction.amount), 0);
-});
-
-
-const totalBalance = computed(() => {
-  return totalIncome.value - totalExpense.value;
-});
-
-
-// ─────────────────────────────────────────────
-// Monthly Summary
-// ─────────────────────────────────────────────
-
-const currentMonth = new Date().getMonth();
-const currentYear = new Date().getFullYear();
-
-const monthlyTransactions = computed(() => {
-  return transactions.value.filter(transaction => {
-    const date = new Date(`${transaction.date}T00:00:00`);
-
-    return (
-      date.getMonth() === currentMonth &&
-      date.getFullYear() === currentYear
-    );
-  });
-});
-
-
-const monthlyIncome = computed(() => {
-  return monthlyTransactions.value
-    .filter(transaction => transaction.type === 'income')
-    .reduce((total, transaction) => total + Number(transaction.amount), 0);
-});
-
-
-const monthlyExpense = computed(() => {
-  return monthlyTransactions.value
-    .filter(transaction => transaction.type === 'expense')
-    .reduce((total, transaction) => total + Number(transaction.amount), 0);
-});
-
-
-const monthlyBalance = computed(() => {
-  return monthlyIncome.value - monthlyExpense.value;
-});
-
-
-// ─────────────────────────────────────────────
-// Filter Categories
-// ─────────────────────────────────────────────
 
 const filterCategories = computed(() => {
   return [...new Set(
-    transactions.value.map(transaction => transaction.category)
+    transactions.value.map(item => item.category)
   )].sort();
 });
 
-
-// ─────────────────────────────────────────────
-// Filtered Transactions
-// ─────────────────────────────────────────────
-
-const filteredTransactions = computed(() => {
-  const searchTerm = search.value.trim().toLowerCase();
-
-  return transactions.value.filter(transaction => {
-
-    const matchesSearch =
-      !searchTerm ||
-      transaction.title.toLowerCase().includes(searchTerm) ||
-      transaction.category.toLowerCase().includes(searchTerm);
-
-    const matchesType =
-      typeFilter.value === 'all' ||
-      transaction.type === typeFilter.value;
-
-    const matchesCategory =
-      categoryFilter.value === 'all' ||
-      transaction.category === categoryFilter.value;
-
-    return (
-      matchesSearch &&
-      matchesType &&
-      matchesCategory
-    );
-  });
+// A selected category may vanish when its last transaction is deleted.
+watch(filterCategories, categories => {
+  if (
+    categoryFilter.value !== 'all' &&
+    !categories.includes(categoryFilter.value)
+  ) {
+    categoryFilter.value = 'all';
+  }
 });
 
+watch([search, typeFilter, categoryFilter, sort], () => {
+  visibleCount.value = PAGE_SIZE;
+});
+
+const filteredTransactions = computed(() => {
+  const term = search.value.trim().toLowerCase();
+
+  return transactions.value
+    .filter(item => {
+      const matchesSearch =
+        !term ||
+        item.title.toLowerCase().includes(term) ||
+        item.category.toLowerCase().includes(term);
+
+      const matchesType =
+        typeFilter.value === 'all' || item.type === typeFilter.value;
+
+      const matchesCategory =
+        categoryFilter.value === 'all' ||
+        item.category === categoryFilter.value;
+
+      return matchesSearch && matchesType && matchesCategory;
+    })
+    .sort(sorters[sort.value]);
+});
+
+const visibleTransactions = computed(() =>
+  filteredTransactions.value.slice(0, visibleCount.value)
+);
+
+const remainingCount = computed(() =>
+  Math.max(filteredTransactions.value.length - visibleCount.value, 0)
+);
+
+const showMore = () => {
+  visibleCount.value += PAGE_SIZE;
+};
+
 
 // ─────────────────────────────────────────────
-// Expense Breakdown
+// Monthly summary
+// ─────────────────────────────────────────────
+
+// null = "follow the current month" (rolls over automatically).
+const monthOverride = ref(null);
+
+const selectedMonth = computed({
+  get: () => monthOverride.value ?? nowMonth.value,
+  set: (key) => {
+    monthOverride.value = key === nowMonth.value ? null : key;
+  }
+});
+
+const monthOptions = computed(() => {
+  const months = new Set([nowMonth.value, selectedMonth.value]);
+
+  transactions.value.forEach(item => months.add(monthKeyOf(item.date)));
+
+  return [...months].sort().reverse();
+});
+
+const monthlyTransactions = computed(() =>
+  transactions.value.filter(
+    item => monthKeyOf(item.date) === selectedMonth.value
+  )
+);
+
+const monthlyIncome = computed(() =>
+  sumAmounts(monthlyTransactions.value.filter(item => item.type === 'income'))
+);
+
+const monthlyExpense = computed(() =>
+  sumAmounts(monthlyTransactions.value.filter(item => item.type === 'expense'))
+);
+
+const monthlyBalance = computed(
+  () => Math.round((monthlyIncome.value - monthlyExpense.value) * 100) / 100
+);
+
+
+// ─────────────────────────────────────────────
+// Expense breakdown
 // ─────────────────────────────────────────────
 
 const expenseBreakdown = computed(() => {
-  const categories = {};
+  const groups = {};
 
   transactions.value
-    .filter(transaction => transaction.type === 'expense')
-    .forEach(transaction => {
-      if (!categories[transaction.category]) {
-        categories[transaction.category] = 0;
-      }
-
-      categories[transaction.category] += Number(transaction.amount);
+    .filter(item => item.type === 'expense')
+    .forEach(item => {
+      (groups[item.category] ??= []).push(item);
     });
 
-  return Object.entries(categories)
-    .map(([category, amount]) => ({
-      category,
-      amount
-    }))
+  return Object.entries(groups)
+    .map(([category, items]) => ({ category, amount: sumAmounts(items) }))
     .sort((a, b) => b.amount - a.amount);
 });
 
-
-const highestExpense = computed(() => {
-  return expenseBreakdown.value.length
-    ? expenseBreakdown.value[0].amount
-    : 0;
-});
+const highestExpense = computed(() =>
+  expenseBreakdown.value.length ? expenseBreakdown.value[0].amount : 0
+);
 
 
 // ─────────────────────────────────────────────
-// CSV Export
+// Export / Import
 // ─────────────────────────────────────────────
 
 const exportCSV = () => {
@@ -334,120 +340,102 @@ const exportCSV = () => {
     return;
   }
 
-  const headers = [
-    'Title',
-    'Category',
-    'Type',
-    'Amount',
-    'Date'
-  ];
-
-  const rows = transactions.value.map(transaction => [
-    `"${transaction.title.replace(/"/g, '""')}"`,
-    `"${transaction.category.replace(/"/g, '""')}"`,
-    transaction.type,
-    transaction.amount,
-    transaction.date
-  ]);
-
-  const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.join(','))
-  ].join('\n');
-
-  const blob = new Blob(
-    [csvContent],
-    { type: 'text/csv;charset=utf-8;' }
-  );
-
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement('a');
-
-  link.href = url;
-  link.download = 'fintrack-transactions.csv';
-
-  document.body.appendChild(link);
-  link.click();
-
-  document.body.removeChild(link);
-
-  URL.revokeObjectURL(url);
-};
-
-
-// ─────────────────────────────────────────────
-// LocalStorage
-// ─────────────────────────────────────────────
-
-const STORAGE_KEY = 'fintrack_transactions';
-
-
-const saveToLocalStorage = () => {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(transactions.value)
+  downloadFile(
+    `fintrack-transactions-${todayISO()}.csv`,
+    toCSV(transactions.value),
+    'text/csv;charset=utf-8;'
   );
 };
 
+const exportJSON = () => {
+  if (!transactions.value.length) {
+    return;
+  }
 
-const loadFromLocalStorage = () => {
-  const savedTransactions = localStorage.getItem(STORAGE_KEY);
+  downloadFile(
+    `fintrack-backup-${todayISO()}.json`,
+    toBackupJSON(transactions.value),
+    'application/json'
+  );
+};
 
-  if (!savedTransactions) {
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+
+const importFile = async (file) => {
+  if (file.size > MAX_IMPORT_BYTES) {
+    toast.error('This file is too large (max 5 MB).');
     return;
   }
 
   try {
-    const parsedTransactions = JSON.parse(savedTransactions);
+    const text = await file.text();
 
-    if (Array.isArray(parsedTransactions)) {
-      transactions.value = parsedTransactions;
+    const isJSON =
+      /\.json$/i.test(file.name) || file.type === 'application/json';
+
+    const { items, dropped } = isJSON
+      ? parseBackupJSON(text)
+      : csvToTransactions(text);
+
+    if (!items.length) {
+      toast.error(
+        dropped
+          ? `No valid rows found (${dropped} skipped).`
+          : 'No transactions found in this file.'
+      );
+      return;
     }
+
+    const { added, duplicates } = importItems(items);
+
+    const parts = [`Imported ${added} transaction${added === 1 ? '' : 's'}`];
+
+    if (duplicates) {
+      parts.push(`${duplicates} duplicate${duplicates === 1 ? '' : 's'} skipped`);
+    }
+
+    if (dropped) {
+      parts.push(`${dropped} invalid row${dropped === 1 ? '' : 's'} skipped`);
+    }
+
+    toast.success(`${parts.join(', ')}.`);
   } catch (error) {
-    console.error(
-      'Failed to load transactions from LocalStorage:',
-      error
-    );
+    toast.error(error?.message || 'Could not read this file.');
   }
 };
-
-
-watch(
-  transactions,
-  saveToLocalStorage,
-  { deep: true }
-);
-
-
-onMounted(() => {
-  loadFromLocalStorage();
-});
 </script>
-
 
 <template>
   <div class="app">
 
-    <!-- Header -->
     <AppHeader
       :transaction-count="transactions.length"
-      @export="exportCSV"
+      @export-csv="exportCSV"
+      @export-json="exportJSON"
+      @import-file="importFile"
     />
 
 
     <main class="container">
 
-      <!-- Welcome -->
+      <p
+        v-if="storageWarning"
+        class="banner"
+        role="alert"
+      >
+        {{ storageWarning }}
+      </p>
+
+
       <section class="welcome">
         <div>
           <span class="welcome-label">
             PERSONAL FINANCE
           </span>
 
-          <h1>
+          <h2>
             Manage your money with confidence.
-          </h1>
+          </h2>
 
           <p>
             Track your income and expenses in one simple place.
@@ -456,7 +444,6 @@ onMounted(() => {
       </section>
 
 
-      <!-- Summary Cards -->
       <SummaryCards
         :total-income="totalIncome"
         :total-expense="totalExpense"
@@ -464,34 +451,29 @@ onMounted(() => {
       />
 
 
-      <!-- Monthly Summary -->
       <MonthlySummary
+        v-model:month="selectedMonth"
+        :month-options="monthOptions"
         :income="monthlyIncome"
         :expense="monthlyExpense"
         :balance="monthlyBalance"
       />
 
 
-      <!-- Charts -->
-      <FinanceCharts
-        :transactions="transactions"
-      />
+      <FinanceCharts :transactions="transactions" />
 
 
-      <!-- Transaction Form -->
       <TransactionForm
-        :transaction="transaction"
-        :editing-id="editingId"
-        :income-categories="incomeCategories"
-        :expense-categories="expenseCategories"
-        @submit="submit"
-        @cancel="resetForm"
-        @type-change="changeType"
+        :editing="editingTransaction"
+        @submit="onSubmit"
+        @cancel="cancelEdit"
       />
 
 
-      <!-- Transactions -->
-      <section class="transactions-section">
+      <section
+        class="transactions-section"
+        aria-labelledby="transactions-title"
+      >
 
         <div class="section-heading">
 
@@ -500,15 +482,16 @@ onMounted(() => {
               TRANSACTION HISTORY
             </span>
 
-            <h2>
+            <h2 id="transactions-title">
               Your Transactions
             </h2>
           </div>
 
           <button
             v-if="transactions.length"
+            type="button"
             class="clear-btn"
-            @click="clearAll"
+            @click="showClearConfirm = true"
           >
             Clear All
           </button>
@@ -516,24 +499,20 @@ onMounted(() => {
         </div>
 
 
-        <!-- Filters -->
         <TransactionFilters
-          :search="search"
-          :type-filter="typeFilter"
-          :category-filter="categoryFilter"
+          v-model:search="search"
+          v-model:type-filter="typeFilter"
+          v-model:category-filter="categoryFilter"
+          v-model:sort="sort"
           :categories="filterCategories"
-          @update:search="search = $event"
-          @update:type-filter="typeFilter = $event"
-          @update:category-filter="categoryFilter = $event"
         />
 
 
-        <!-- No Transactions -->
         <div
           v-if="!transactions.length"
           class="empty-state"
         >
-          <div class="empty-icon">
+          <div class="empty-icon" aria-hidden="true">
             $
           </div>
 
@@ -543,17 +522,16 @@ onMounted(() => {
 
           <p>
             Add your first income or expense to start
-            tracking your finances.
+            tracking your finances, or import a CSV / JSON backup.
           </p>
         </div>
 
 
-        <!-- No Filter Results -->
         <div
           v-else-if="!filteredTransactions.length"
           class="empty-state"
         >
-          <div class="empty-icon">
+          <div class="empty-icon" aria-hidden="true">
             ⌕
           </div>
 
@@ -567,19 +545,35 @@ onMounted(() => {
         </div>
 
 
-        <!-- Transaction List -->
-        <TransactionList
-          v-else
-          :transactions="filteredTransactions"
-          :editing-id="editingId"
-          @edit="editTransaction"
-          @delete="deleteTransaction"
-        />
+        <template v-else>
+          <TransactionList
+            :transactions="visibleTransactions"
+            :editing-id="editingId"
+            @edit="startEdit"
+            @delete="onDelete"
+          />
+
+          <div
+            v-if="remainingCount > 0"
+            class="load-more"
+          >
+            <button
+              type="button"
+              @click="showMore"
+            >
+              Show more
+            </button>
+
+            <span>
+              Showing {{ visibleTransactions.length }}
+              of {{ filteredTransactions.length }}
+            </span>
+          </div>
+        </template>
 
       </section>
 
 
-      <!-- Expense Breakdown -->
       <ExpenseBreakdown
         :expenses="expenseBreakdown"
         :highest-expense="highestExpense"
@@ -588,12 +582,25 @@ onMounted(() => {
     </main>
 
 
-    <!-- Footer -->
     <footer class="footer">
       <p>
-        FinTrack · Personal Finance Tracker
+        FinTrack · Personal Finance Tracker ·
+        Your data stays in this browser
       </p>
     </footer>
+
+
+    <ConfirmDialog
+      :open="showClearConfirm"
+      title="Delete all transactions?"
+      :message="`This will remove all ${transactions.length} transactions from this browser. You can undo right after, or restore from a backup.`"
+      confirm-label="Delete all"
+      danger
+      @confirm="confirmClearAll"
+      @cancel="showClearConfirm = false"
+    />
+
+    <ToastHost />
 
   </div>
 </template>
@@ -631,7 +638,7 @@ onMounted(() => {
   letter-spacing: 1.4px;
 }
 
-.welcome h1 {
+.welcome h2 {
   max-width: 700px;
   margin: 0;
   color: #f8fafc;
@@ -643,7 +650,7 @@ onMounted(() => {
 
 .welcome p {
   margin: 12px 0 0;
-  color: #64748b;
+  color: #8b9ab3;
   font-size: 15px;
   line-height: 1.6;
 }
@@ -712,7 +719,7 @@ onMounted(() => {
   border: 1px solid #263449;
   border-radius: 50%;
   background: #0b1120;
-  color: #64748b;
+  color: #8b9ab3;
   font-size: 20px;
 }
 
@@ -726,7 +733,7 @@ onMounted(() => {
 .empty-state p {
   max-width: 430px;
   margin: 8px auto 0;
-  color: #64748b;
+  color: #8b9ab3;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -744,7 +751,7 @@ onMounted(() => {
 
 .footer p {
   margin: 0;
-  color: #475569;
+  color: #7b8aa3;
   font-size: 12px;
 }
 
@@ -763,7 +770,7 @@ onMounted(() => {
     margin-bottom: 25px;
   }
 
-  .welcome h1 {
+  .welcome h2 {
     font-size: 28px;
   }
 
@@ -791,7 +798,7 @@ onMounted(() => {
     padding-bottom: 50px;
   }
 
-  .welcome h1 {
+  .welcome h2 {
     font-size: 25px;
   }
 
@@ -804,5 +811,49 @@ onMounted(() => {
   .clear-btn {
     align-self: flex-end;
   }
+}
+
+
+/* ─────────────────────────────────────────────
+   Banner / Load more
+───────────────────────────────────────────── */
+
+.banner {
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  border: 1px solid #7c2d12;
+  border-radius: 10px;
+  background: #2a1510;
+  color: #fdba74;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.load-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.load-more button {
+  border: 1px solid #26344d;
+  border-radius: 9px;
+  padding: 10px 18px;
+  background: #121a2b;
+  color: #cbd5e1;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.load-more button:hover {
+  background: #182238;
+  color: #fff;
+}
+
+.load-more span {
+  color: #8b9ab3;
+  font-size: 12px;
 }
 </style>

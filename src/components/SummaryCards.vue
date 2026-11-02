@@ -1,23 +1,21 @@
 <script setup>
+import { money } from '../utils/format.js';
+
 defineProps({
   totalIncome: Number,
   totalExpense: Number,
   totalBalance: Number
 });
 
-const formatAmount = amount => {
-  return new Intl.NumberFormat('en-BD').format(
-    Number(amount)
-  );
-};
+
 </script>
 
 <template>
-  <section class="summary-grid">
+  <section class="summary-grid" aria-label="Overall summary">
 
     <div class="summary-card">
 
-      <div class="summary-icon income">
+      <div class="summary-icon income" aria-hidden="true">
         ↗
       </div>
 
@@ -25,7 +23,7 @@ const formatAmount = amount => {
         <span>Total Income</span>
 
         <strong>
-          ৳ {{ formatAmount(totalIncome) }}
+          {{ money(totalIncome) }}
         </strong>
       </div>
 
@@ -33,7 +31,7 @@ const formatAmount = amount => {
 
     <div class="summary-card">
 
-      <div class="summary-icon expense">
+      <div class="summary-icon expense" aria-hidden="true">
         ↘
       </div>
 
@@ -41,7 +39,7 @@ const formatAmount = amount => {
         <span>Total Expense</span>
 
         <strong>
-          ৳ {{ formatAmount(totalExpense) }}
+          {{ money(totalExpense) }}
         </strong>
       </div>
 
@@ -49,7 +47,7 @@ const formatAmount = amount => {
 
     <div class="summary-card">
 
-      <div class="summary-icon balance">
+      <div class="summary-icon balance" aria-hidden="true">
         ৳
       </div>
 
@@ -61,7 +59,7 @@ const formatAmount = amount => {
             negative: totalBalance < 0
           }"
         >
-          ৳ {{ formatAmount(totalBalance) }}
+          {{ money(totalBalance) }}
         </strong>
       </div>
 
@@ -124,7 +122,7 @@ const formatAmount = amount => {
 .summary-card span {
   display: block;
 
-  color: #64748b;
+  color: #8b9ab3;
 
   font-size: 13px;
 

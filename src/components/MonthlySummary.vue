@@ -1,74 +1,70 @@
 <script setup>
+import { money, formatMonth } from '../utils/format.js';
+
 defineProps({
   income: Number,
   expense: Number,
-  balance: Number
+  balance: Number,
+  month: { type: String, required: true },
+  monthOptions: { type: Array, default: () => [] }
 });
 
-const formatAmount = amount => {
-  return new Intl.NumberFormat('en-BD').format(
-    Number(amount)
-  );
-};
+defineEmits(['update:month']);
 </script>
 
+
 <template>
-  <section class="monthly-card">
+  <section class="monthly-card" aria-labelledby="monthly-title">
 
     <div class="heading">
-
       <div>
-        <h3>This Month</h3>
-
-        <p>
-          Current month financial summary
-        </p>
+        <h3 id="monthly-title">Monthly Summary</h3>
+        <p>Pick a month to review</p>
       </div>
 
-      <span class="badge">
-        {{
-          new Date().toLocaleDateString(
-            'en-BD',
-            {
-              month: 'long',
-              year: 'numeric'
-            }
-          )
-        }}
-      </span>
-
+      <select
+        class="month-select"
+        aria-label="Select month"
+        :value="month"
+        @change="$emit('update:month', $event.target.value)"
+      >
+        <option
+          v-for="key in monthOptions"
+          :key="key"
+          :value="key"
+        >
+          {{ formatMonth(key) }}
+        </option>
+      </select>
     </div>
 
-    <div class="monthly-grid">
 
+    <div class="monthly-grid">
       <div>
         <span>Income</span>
-
         <strong class="green">
-          + ৳ {{ formatAmount(income) }}
+          + {{ money(income) }}
         </strong>
       </div>
 
       <div>
         <span>Expense</span>
-
         <strong class="red">
-          - ৳ {{ formatAmount(expense) }}
+          - {{ money(expense) }}
         </strong>
       </div>
 
       <div>
         <span>Net Balance</span>
-
-        <strong>
-          ৳ {{ formatAmount(balance) }}
+        <strong :class="{ red: balance < 0 }">
+          {{ money(balance) }}
         </strong>
       </div>
-
     </div>
 
   </section>
 </template>
+
 
 <style scoped>
 .monthly-card {
@@ -100,7 +96,7 @@ const formatAmount = amount => {
 .heading p {
   margin: 5px 0 0;
 
-  color: #64748b;
+  color: #8b9ab3;
 
   font-size: 13px;
 }
@@ -108,7 +104,7 @@ const formatAmount = amount => {
 .badge {
   background: #172033;
 
-  color: #94a3b8;
+  color: #9aa8bf;
 
   padding: 7px 11px;
 
@@ -140,7 +136,7 @@ const formatAmount = amount => {
 .monthly-grid span {
   display: block;
 
-  color: #64748b;
+  color: #8b9ab3;
 
   font-size: 12px;
 

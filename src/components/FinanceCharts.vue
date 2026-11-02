@@ -1,5 +1,9 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { CURRENCY_SYMBOL, LOCALE } from '../config.js';
+import { money } from '../utils/format.js';
+import { yearOf, monthIndexOf } from '../utils/date.js';
+import { round2 } from '../utils/money.js';
 
 import {
   Chart as ChartJS,
@@ -33,9 +37,7 @@ const props = defineProps({
 // Currency Formatter
 // =========================
 
-const formatCurrency = value => {
-  return `৳ ${new Intl.NumberFormat('en-BD').format(value)}`;
-};
+const formatCurrency = money;
 
 // =========================
 // Chart Colors
@@ -51,7 +53,7 @@ const chartColors = [
   '#f97316',
   '#ec4899',
   '#14b8a6',
-  '#64748b'
+  '#8b9ab3'
 ];
 
 // =========================
@@ -112,25 +114,45 @@ const monthNames = [
   'Dec'
 ];
 
+// Years that actually have data (newest first), always including this year.
+const availableYears = computed(() => {
+  const years = new Set([new Date().getFullYear()]);
+
+  props.transactions.forEach(trans => years.add(yearOf(trans.date)));
+
+  return [...years].sort((a, b) => b - a);
+});
+
+const selectedYear = ref(availableYears.value[0]);
+
+// If the selected year disappears (e.g. data deleted), fall back.
+watch(availableYears, years => {
+  if (!years.includes(selectedYear.value)) {
+    selectedYear.value = years[0];
+  }
+});
+
+const hasYearData = computed(() =>
+  props.transactions.some(trans => yearOf(trans.date) === selectedYear.value)
+);
+
 const monthlyData = computed(() => {
   const income = Array(12).fill(0);
   const expense = Array(12).fill(0);
 
   props.transactions.forEach(trans => {
-    if (!trans.date) {
+    if (yearOf(trans.date) !== selectedYear.value) {
       return;
     }
 
-    const month = new Date(
-      `${trans.date}T00:00:00`
-    ).getMonth();
+    const month = monthIndexOf(trans.date);
 
     if (trans.type === 'income') {
-      income[month] += Number(trans.amount);
+      income[month] = round2(income[month] + Number(trans.amount));
     }
 
     if (trans.type === 'expense') {
-      expense[month] += Number(trans.amount);
+      expense[month] = round2(expense[month] + Number(trans.amount));
     }
   });
 
@@ -181,7 +203,7 @@ const doughnutOptions = {
       position: 'bottom',
 
       labels: {
-        color: '#94a3b8',
+        color: '#9aa8bf',
 
         padding: 16,
 
@@ -222,7 +244,7 @@ const barOptions = {
       position: 'bottom',
 
       labels: {
-        color: '#94a3b8',
+        color: '#9aa8bf',
 
         padding: 16,
 
@@ -246,7 +268,7 @@ const barOptions = {
   scales: {
     x: {
       ticks: {
-        color: '#64748b',
+        color: '#8b9ab3',
 
         font: {
           size: 11
@@ -266,15 +288,15 @@ const barOptions = {
       beginAtZero: true,
 
       ticks: {
-        color: '#64748b',
+        color: '#8b9ab3',
 
         font: {
           size: 11
         },
 
         callback: value => {
-          return `৳ ${new Intl.NumberFormat(
-            'en-BD',
+          return `${CURRENCY_SYMBOL} ${new Intl.NumberFormat(
+            LOCALE,
             {
               notation: 'compact',
               maximumFractionDigits: 1
@@ -323,6 +345,8 @@ const barOptions = {
           )
         "
         class="doughnut-wrapper"
+        role="img"
+        aria-label="Expense distribution by category"
       >
         <Doughnut
           :data="expenseData"
@@ -359,11 +383,27 @@ const barOptions = {
           </p>
         </div>
 
+        <select
+          v-model="selectedYear"
+          class="year-select"
+          aria-label="Select year"
+        >
+          <option
+            v-for="year in availableYears"
+            :key="year"
+            :value="year"
+          >
+            {{ year }}
+          </option>
+        </select>
+
       </div>
 
       <div
-        v-if="transactions.length"
+        v-if="hasYearData"
         class="bar-wrapper"
+        role="img"
+        :aria-label="`Income versus expense by month for ${selectedYear}`"
       >
         <Bar
           :data="monthlyData"
@@ -378,7 +418,7 @@ const barOptions = {
         <span>📈</span>
 
         <p>
-          No transaction data available
+          No transactions in {{ selectedYear }}
         </p>
       </div>
 
@@ -411,6 +451,23 @@ const barOptions = {
   min-width: 0;
 }
 
+.chart-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.year-select {
+  background: #172033;
+  color: #cbd5e1;
+  border: 1px solid #26344d;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .chart-heading h3 {
   margin: 0;
 
@@ -422,7 +479,7 @@ const barOptions = {
 .chart-heading p {
   margin: 5px 0 0;
 
-  color: #64748b;
+  color: #8b9ab3;
 
   font-size: 13px;
 }
@@ -450,7 +507,7 @@ const barOptions = {
 
   justify-content: center;
 
-  color: #64748b;
+  color: #8b9ab3;
 }
 
 .chart-empty span {

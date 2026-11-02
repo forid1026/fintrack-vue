@@ -1,158 +1,128 @@
 # 💰 FinTrack
 
-A simple and modern **Personal Income & Expense Tracker** built with **Vue 3**.
-
-FinTrack helps users track their income and expenses, monitor their balance, analyze spending, and keep their financial data saved in the browser.
+A fast, private **Personal Income & Expense Tracker** built with **Vue 3 + Vite**.
+Works offline, installs as an app (PWA), and keeps all data in the user's own browser.
 
 ## ✨ Features
 
-- ➕ Add income and expense
-- ✏️ Edit transactions
-- 🗑️ Delete transactions
-- 🧹 Clear all transactions
-- 🔍 Search transactions
-- 🔽 Filter by type and category
-- 📅 Track transaction dates
-- 💰 Total income, expense and balance
-- 📆 Monthly financial summary
-- 📊 Expense breakdown by category
-- 🥧 Expense distribution chart
-- 📈 Monthly income vs expense chart
-- 💾 LocalStorage data persistence
-- 📥 Export transactions as CSV
-- 📱 Fully responsive design
-- 🎨 Modern dark navy UI
+**Tracking**
+- Add / edit / delete income and expense transactions (decimal amounts supported)
+- Inline form validation with clear error messages
+- Undo for deleted transactions and for "Clear All"
+- Search, filter by type & category, sort (newest, oldest, highest, lowest)
+- "Show more" pagination, so big histories stay fast
 
-## 🛠️ Tech Stack
+**Insights**
+- Total income, expense and balance
+- **Monthly summary with a month picker** (follows the current month automatically)
+- Expense breakdown by category
+- Expense distribution chart + Income vs Expense chart **with a year picker**
 
-- **Vue 3**
-- **JavaScript**
-- **Vite**
-- **Chart.js**
-- **Vue Chart.js**
-- **CSS3**
-- **LocalStorage**
+**Data safety**
+- Saved in `localStorage`, with safe handling of full/blocked/corrupted storage
+  (a visible warning is shown and corrupted data is kept as a raw copy)
+- **Live sync between browser tabs** - change something in one tab and the others update instantly
+- Export CSV (Excel-safe, Bangla-safe, formula-injection-safe)
+- **JSON backup & restore**, and CSV import (duplicates are skipped automatically)
 
-### Vue Concepts
-
-- Composition API
-- `<script setup>`
-- `ref()`
-- `computed()`
-- `watch()`
-- `onMounted()`
-- Props & Emits
-- Component-based architecture
-
-## 📂 Project Structure
-
-    fintrack-vue/
-    │
-    ├── public/
-    │   └── favicon.svg
-    │
-    ├── src/
-    │   ├── assets/
-    │   │   └── main.css
-    │   │
-    │   ├── components/
-    │   │   ├── AppHeader.vue
-    │   │   ├── SummaryCards.vue
-    │   │   ├── MonthlySummary.vue
-    │   │   ├── TransactionForm.vue
-    │   │   ├── TransactionFilters.vue
-    │   │   ├── TransactionList.vue
-    │   │   ├── ExpenseBreakdown.vue
-    │   │   └── FinanceCharts.vue
-    │   │
-    │   ├── App.vue
-    │   └── main.js
-    │
-    ├── index.html
-    ├── package.json
-    └── README.md
+**Production quality**
+- Installable PWA with offline support (service worker)
+- Security headers + strict Content-Security-Policy (Vercel / Netlify / Cloudflare / nginx)
+- No third-party requests at runtime (no external fonts, no analytics)
+- Accessible: labelled form fields, keyboard focus, screen-reader announcements, reduced-motion support
+- Chart.js is lazy-loaded to keep the first paint fast
+- Unit tests for all core logic (`npm test`)
 
 ## 🚀 Getting Started
 
-### Clone the repository
+```bash
+npm install
+npm run dev        # development server
+npm test           # unit tests (no extra dependencies)
+npm run build      # production build -> ./dist
+npm run preview    # serve the production build locally
+```
 
-    git clone https://github.com/forid1026/fintrack-vue.git
+Requires Node.js `^22.18.0` or `>=24.12.0`.
 
-### Go to the project directory
+## ⚙️ Configuration
 
-    cd fintrack-vue
+Copy `.env.example` to `.env` (or set the variables in your hosting dashboard):
 
-### Install dependencies
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `VITE_SITE_URL` | Public site URL, used for canonical / Open Graph / Twitter tags | _(tags omitted)_ |
+| `VITE_CURRENCY_SYMBOL` | Currency symbol shown in the UI | `৳` |
+| `VITE_LOCALE` | Number/date format locale | `en-BD` |
 
-    npm install
+## 🌐 Deployment
 
-### Start the development server
+`npm run build` creates a static site in `dist/`. Any static host works.
 
-    npm run dev
+- **Vercel** - import the repo. Build command `npm run build`, output `dist`. `vercel.json` already sets the security and cache headers.
+- **Netlify / Cloudflare Pages** - build command `npm run build`, publish directory `dist`. `public/_headers` is copied into `dist` automatically.
+- **VPS (nginx)** - copy `dist/` to the server and use `docs/nginx.conf` as a starting point.
+- Set `VITE_SITE_URL` to your final domain before building so social previews work.
+- Deploying under a sub-path (e.g. `/fintrack/`)? Set `base: '/fintrack/'` in `vite.config.js`.
 
-Open the local URL shown in your terminal.
+> **Important - HTTPS:** service workers, installability and secure headers need HTTPS. All the hosts above provide it by default.
 
 ## 💾 Data Storage
 
-FinTrack uses **LocalStorage** to save transactions directly in the browser.
+Transactions are stored in the browser under the `localStorage` key `fintrack_transactions`.
+Data never leaves the device. Because of that, **clearing browser data deletes it** - use
+**Backup** (JSON) regularly. This build is intentionally single-device; if you later want
+accounts and cross-device sync, add an API (e.g. Laravel or Supabase) behind the same
+`useTransactions` composable.
 
-Storage key:
+Transaction shape:
 
-    fintrack_transactions
+```json
+{
+  "id": "3f2b0c0e-...",
+  "title": "Monthly Salary",
+  "category": "Salary",
+  "amount": 40000,
+  "type": "income",
+  "date": "2026-10-01"
+}
+```
 
-Example transaction:
+Older data saved by previous versions (numeric ids, bare arrays) is loaded and cleaned automatically.
 
-    {
-      id: 123456789,
-      title: "Monthly Salary",
-      category: "Salary",
-      amount: 40000,
-      type: "income",
-      date: "2026-09-21"
-    }
+## 📂 Project Structure
 
-## 📌 Categories
+```
+src/
+├── main.js                  # app bootstrap, error handler, service worker
+├── config.js                # currency, locale, storage key, page size
+├── constants/categories.js
+├── composables/
+│   ├── useTransactions.js   # state, CRUD, import, totals, cross-tab sync
+│   ├── useCurrentMonth.js   # rolls over to the new month automatically
+│   └── useToast.js
+├── utils/                   # pure, unit-tested helpers
+│   ├── money.js  date.js  validation.js  csv.js  backup.js  storage.js
+│   └── format.js  download.js  id.js
+├── components/
+└── App.vue
+public/                      # favicon, PWA icons, manifest, sw.js, _headers
+tests/utils.test.js
+docs/nginx.conf
+vercel.json
+```
 
-### Income
+## ✅ Pre-launch checklist
 
-Salary, Freelance, Business, Investment, Bonus, Gift, Other
-
-### Expense
-
-Groceries, Utilities, Entertainment, Restaurants, Travel, Clothing, Healthcare, Personal, Education, Other
-
-## 📊 Financial Summary
-
-FinTrack provides:
-
-- Total Income
-- Total Expense
-- Current Balance
-- Monthly Income
-- Monthly Expense
-- Monthly Net Balance
-- Category-wise Expense Breakdown
-- Income vs Expense Charts
+- [ ] `npm test` passes and `npm run build` succeeds
+- [ ] `VITE_SITE_URL` set to the real domain
+- [ ] Site served over HTTPS
+- [ ] Open the deployed site, add a transaction, reload, then go offline and reload again
+- [ ] Check the headers at <https://securityheaders.com>
 
 ## 📸 Preview
 
-Add a screenshot of the application here:
-
 ![FinTrack Preview](./screenshots/fintrack.png)
-
-## 🎯 Purpose
-
-FinTrack was created as a practical **Vue 3 learning and portfolio project** to practice:
-
-- Reactive state management
-- CRUD operations
-- Component communication
-- Form handling
-- Data filtering
-- LocalStorage
-- Chart integration
-- CSV export
-- Responsive UI development
 
 ## 👨‍💻 Author
 

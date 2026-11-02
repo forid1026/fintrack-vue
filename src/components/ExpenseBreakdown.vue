@@ -1,4 +1,6 @@
 <script setup>
+import { money } from '../utils/format.js';
+
 defineProps({
   expenses: {
     type: Array,
@@ -11,11 +13,7 @@ defineProps({
   }
 });
 
-const formatAmount = amount => {
-  return new Intl.NumberFormat('en-BD').format(
-    Number(amount)
-  );
-};
+
 </script>
 
 <template>
@@ -49,7 +47,7 @@ const formatAmount = amount => {
           </span>
 
           <strong>
-            ৳ {{ formatAmount(item.amount) }}
+            {{ money(item.amount) }}
           </strong>
 
         </div>
@@ -99,7 +97,7 @@ const formatAmount = amount => {
 .heading p {
   margin: 5px 0 0;
 
-  color: #64748b;
+  color: #8b9ab3;
 
   font-size: 13px;
 }
